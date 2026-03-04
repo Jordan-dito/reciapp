@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Splash screen nativo personalizado con logo -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Fondo verde -->
+    <item>
+        <bitmap android:gravity="fill" android:src="@drawable/background"/>
+    </item>
+    
+    <!-- Logo: círculo blanco con icono de reciclaje verde (igual que en login) -->
+    <item
+        android:drawable="@drawable/splash_logo"
+        android:gravity="center" />
+</layer-list>
