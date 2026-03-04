@@ -8,6 +8,7 @@ import '../../bloc/auth/auth_event.dart';
 import '../../bloc/auth/auth_state.dart';
 import '../home/home_screen.dart';
 import '../reports/reports_screen.dart';
+import '../reports/reportes_api_screen.dart';
 import '../profile/profile_screen.dart';
 
 class MainScreen extends StatefulWidget {
@@ -22,7 +23,7 @@ class _MainScreenState extends State<MainScreen> {
 
   List<Widget> get _screens => [
         const HomeScreen(),
-        const ReportsScreen(),
+        const _ReportesTabView(),
         const ProfileScreen(),
       ];
 
@@ -116,6 +117,42 @@ class _MainScreenState extends State<MainScreen> {
             context.read<AuthBloc>().add(const RefreshUserEvent());
           }
         },
+      ),
+    );
+  }
+}
+
+/// Vista con tabs: Gráficos (charts) y Reportes (API + PDF)
+class _ReportesTabView extends StatelessWidget {
+  const _ReportesTabView();
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          Material(
+            color: Theme.of(context).appBarTheme.backgroundColor ?? AppTheme.white,
+            child: TabBar(
+              labelColor: AppTheme.primaryGreen,
+              unselectedLabelColor: AppTheme.grey,
+              indicatorColor: AppTheme.primaryGreen,
+              tabs: const [
+                Tab(text: 'Gráficos', icon: Icon(Icons.bar_chart)),
+                Tab(text: 'Reportes PDF', icon: Icon(Icons.description)),
+              ],
+            ),
+          ),
+          const Expanded(
+            child: TabBarView(
+              children: [
+                ReportsScreen(),
+                ReportesApiScreen(),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
