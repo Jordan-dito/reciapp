@@ -16,10 +16,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // TODO: Funcionalidad de cambiar foto pendiente
   // final ProfileImageService _profileImageService = ProfileImageService();
 
-  // TODO: Funcionalidad de cambiar foto pendiente
-  // void _showImageSourceDialog() {
-  //   // Implementación pendiente
-  // }
+  // TODO: Al implementar cambio de foto, solicitar permisos primero:
+  // await PermissionService.requestMediaPermissions() antes de ImagePicker.pickImage
+  // Ver: lib/core/services/permission_service.dart
 
   @override
   void initState() {

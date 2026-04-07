@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:open_file/open_file.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:cross_file/cross_file.dart';
+
 import '../../../core/theme/app_theme.dart';
 import '../../../core/network/api_client.dart';
 import '../../../data/datasources/reports_remote_datasource.dart';
@@ -181,7 +184,9 @@ class _ReportesApiScreenState extends State<ReportesApiScreen> {
 
     setState(() => _isDownloadingPdf = true);
     try {
-      final path = await _reportsDataSource.downloadReportePdf(
+      final platform = Theme.of(context).platform;
+
+      final result = await _reportsDataSource.downloadReportePdf(
         usuarioId: authState.user.id,
         tipo: _tipoSeleccionado,
         fechaDesde: _fechaDesde?.toIso8601String().split('T')[0],
@@ -190,11 +195,34 @@ class _ReportesApiScreenState extends State<ReportesApiScreen> {
         rolId: _rolId,
         material: _material.isNotEmpty ? _material : null,
       );
-      await OpenFile.open(path);
+
+      final isMobile = platform == TargetPlatform.android ||
+          platform == TargetPlatform.iOS;
+      if (isMobile) {
+        // En móvil: usar share_plus para que el usuario guarde/comparta donde quiera
+        // (Evita problemas de OpenFile con archivos en directorios de la app)
+        // Usar XFile con path (no fromData) por compatibilidad en Android
+        final xFile = XFile(
+          result.path,
+          mimeType: 'application/pdf',
+          name: 'reporte_${_tipoSeleccionado}.pdf',
+        );
+        await Share.shareXFiles(
+          [xFile],
+          text: 'Reporte $_tipoSeleccionado',
+        );
+      } else {
+        await OpenFile.open(result.path);
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('PDF descargado correctamente'),
+          SnackBar(
+            content: Text(
+              isMobile
+                  ? 'Abre el menú y elige "Guardar" o "Guardar en archivos" para conservar el PDF'
+                  : 'PDF descargado correctamente',
+            ),
             backgroundColor: AppTheme.primaryGreen,
           ),
         );
@@ -216,10 +244,66 @@ class _ReportesApiScreenState extends State<ReportesApiScreen> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _buildFiltrosCard(context),
+          const SizedBox(height: 20),
+          _buildGenerarButton(context),
+          const SizedBox(height: 20),
+          if (_error != null) _buildErrorCard(),
+          if (_error != null) const SizedBox(height: 16),
+          if (_datosReporte.isNotEmpty || _tieneDatos == false) ...[
+            _buildResultadoSection(context),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFiltrosCard(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryGreen.withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.backgroundGreen,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.tune_rounded,
+                  color: AppTheme.primaryGreen,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Filtros del reporte',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.black,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
           _buildTipoDropdown(),
           const SizedBox(height: 16),
           if (_tipoRequiereFechas) ...[
@@ -231,44 +315,89 @@ class _ReportesApiScreenState extends State<ReportesApiScreen> {
             const SizedBox(height: 16),
             _buildRolDropdown(),
           ],
-          const SizedBox(height: 24),
-          FilledButton.icon(
-            onPressed: _isLoadingReporte ? null : _generarReporte,
-            icon: _isLoadingReporte
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh),
-            label: Text(_isLoadingReporte ? 'Cargando...' : 'Generar reporte'),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppTheme.primaryGreen,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-            ),
-          ),
-          const SizedBox(height: 24),
-          if (_error != null)
-            Card(
-              color: Colors.red.shade50,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(_error!, style: const TextStyle(color: Colors.red)),
-              ),
-            ),
-          if (_error != null) const SizedBox(height: 16),
-          if (_datosReporte.isNotEmpty || _tieneDatos == false) ...[
-            Text(
-              'Resultado',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 12),
-            _buildResultado(),
-          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildGenerarButton(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton.icon(
+        onPressed: _isLoadingReporte ? null : _generarReporte,
+        icon: _isLoadingReporte
+            ? SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppTheme.white,
+                ),
+              )
+            : const Icon(Icons.analytics_rounded, size: 22),
+        label: Text(
+          _isLoadingReporte ? 'Cargando...' : 'Generar reporte',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.3,
+          ),
+        ),
+        style: FilledButton.styleFrom(
+          backgroundColor: AppTheme.primaryGreen,
+          foregroundColor: AppTheme.white,
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 2,
+          shadowColor: AppTheme.primaryGreen.withOpacity(0.4),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.red.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline_rounded, color: Colors.red.shade700, size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _error!,
+              style: TextStyle(
+                color: Colors.red.shade800,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResultadoSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Resultado',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: AppTheme.black,
+              ),
+        ),
+        const SizedBox(height: 16),
+        _buildResultado(context),
+      ],
     );
   }
 
@@ -276,13 +405,34 @@ class _ReportesApiScreenState extends State<ReportesApiScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Tipo de reporte *'),
+        Text(
+          'Tipo de reporte *',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.grey,
+          ),
+        ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
           value: _tipoSeleccionado,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: AppTheme.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppTheme.lightGrey),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppTheme.lightGrey),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
+            ),
           ),
+          borderRadius: BorderRadius.circular(12),
           items: _tiposReporte
               .map((t) => DropdownMenuItem(
                     value: t.$1,
@@ -310,10 +460,17 @@ class _ReportesApiScreenState extends State<ReportesApiScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Fecha desde *'),
+              Text(
+                'Fecha desde *',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.grey,
+                ),
+              ),
               const SizedBox(height: 8),
-              OutlinedButton(
-                onPressed: () async {
+              InkWell(
+                onTap: () async {
                   final d = await showDatePicker(
                     context: context,
                     initialDate: _fechaDesde ?? DateTime.now(),
@@ -322,9 +479,33 @@ class _ReportesApiScreenState extends State<ReportesApiScreen> {
                   );
                   if (d != null) setState(() => _fechaDesde = d);
                 },
-                child: Text(_fechaDesde != null
-                    ? format.format(_fechaDesde!)
-                    : 'Seleccionar'),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppTheme.backgroundGreen.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.lightGrey),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.calendar_today_rounded,
+                          size: 20, color: AppTheme.primaryGreen),
+                      const SizedBox(width: 12),
+                      Text(
+                        _fechaDesde != null
+                            ? format.format(_fechaDesde!)
+                            : 'Seleccionar',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: _fechaDesde != null
+                              ? AppTheme.black
+                              : AppTheme.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -334,10 +515,17 @@ class _ReportesApiScreenState extends State<ReportesApiScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Fecha hasta *'),
+              Text(
+                'Fecha hasta *',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.grey,
+                ),
+              ),
               const SizedBox(height: 8),
-              OutlinedButton(
-                onPressed: () async {
+              InkWell(
+                onTap: () async {
                   final d = await showDatePicker(
                     context: context,
                     initialDate: _fechaHasta ?? DateTime.now(),
@@ -346,9 +534,33 @@ class _ReportesApiScreenState extends State<ReportesApiScreen> {
                   );
                   if (d != null) setState(() => _fechaHasta = d);
                 },
-                child: Text(_fechaHasta != null
-                    ? format.format(_fechaHasta!)
-                    : 'Seleccionar'),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppTheme.backgroundGreen.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.lightGrey),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.calendar_today_rounded,
+                          size: 20, color: AppTheme.primaryGreen),
+                      const SizedBox(width: 12),
+                      Text(
+                        _fechaHasta != null
+                            ? format.format(_fechaHasta!)
+                            : 'Seleccionar',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: _fechaHasta != null
+                              ? AppTheme.black
+                              : AppTheme.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -361,13 +573,34 @@ class _ReportesApiScreenState extends State<ReportesApiScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Sucursal (opcional)'),
+        Text(
+          'Sucursal (opcional)',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.grey,
+          ),
+        ),
         const SizedBox(height: 8),
         DropdownButtonFormField<SucursalModel>(
           value: _sucursalSeleccionada,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: AppTheme.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppTheme.lightGrey),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppTheme.lightGrey),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
+            ),
           ),
+          borderRadius: BorderRadius.circular(12),
           hint: const Text('Todas las sucursales'),
           items: [
             const DropdownMenuItem<SucursalModel>(
@@ -391,13 +624,34 @@ class _ReportesApiScreenState extends State<ReportesApiScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Rol (opcional)'),
+        Text(
+          'Rol (opcional)',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.grey,
+          ),
+        ),
         const SizedBox(height: 8),
         DropdownButtonFormField<int>(
           value: _rolId,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: AppTheme.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppTheme.lightGrey),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppTheme.lightGrey),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 2),
+            ),
           ),
+          borderRadius: BorderRadius.circular(12),
           hint: const Text('Todos los roles'),
           items: [
             const DropdownMenuItem<int>(
@@ -415,17 +669,39 @@ class _ReportesApiScreenState extends State<ReportesApiScreen> {
     );
   }
 
-  Widget _buildResultado() {
+  Widget _buildResultado(BuildContext context) {
     if (_datosReporte.isEmpty && !_tieneDatos) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Center(
-            child: Text(
-              'No hay datos disponibles para este reporte',
-              style: TextStyle(color: Colors.grey.shade600),
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+        decoration: BoxDecoration(
+          color: AppTheme.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.primaryGreen.withOpacity(0.06),
+              blurRadius: 20,
+              offset: const Offset(0, 4),
             ),
-          ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Icon(
+              Icons.inbox_rounded,
+              size: 64,
+              color: AppTheme.lightGrey,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No hay datos disponibles para este reporte',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: AppTheme.grey,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -434,42 +710,163 @@ class _ReportesApiScreenState extends State<ReportesApiScreen> {
         ? (_datosReporte.first as Map).keys.toList()
         : <String>[];
 
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryGreen.withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
-              columns: firstRow.map((k) => DataColumn(label: Text(k.toString()))).toList(),
+              headingRowColor: WidgetStateProperty.all(
+                AppTheme.backgroundGreen.withOpacity(0.8),
+              ),
+              headingTextStyle: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: AppTheme.primaryDarkGreen,
+              ),
+              dataTextStyle: const TextStyle(
+                fontSize: 13,
+                color: AppTheme.black,
+              ),
+              columnSpacing: 24,
+              horizontalMargin: 20,
+              columns: firstRow
+                  .map((k) => DataColumn(
+                        label: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          child: Text(
+                            k.toString(),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryDarkGreen,
+                            ),
+                          ),
+                        ),
+                      ))
+                  .toList(),
               rows: _datosReporte.take(100).map((d) {
-                final m = d is Map ? d as Map : <String, dynamic>{};
+                final m = d is Map ? Map<String, dynamic>.from(d) : <String, dynamic>{};
                 return DataRow(
                   cells: firstRow
-                      .map((k) => DataCell(Text('${m[k] ?? ''}'.toString())))
+                      .map((k) => DataCell(
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Text('${m[k] ?? ''}'.toString()),
+                            ),
+                          ))
                       .toList(),
                 );
               }).toList(),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                FilledButton.icon(
-                  onPressed: _isDownloadingPdf ? null : _descargarPdf,
-                  icon: _isDownloadingPdf
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.picture_as_pdf, size: 20),
-                  label: Text(_isDownloadingPdf ? 'Descargando...' : 'Exportar PDF'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.secondaryGreen,
-                  ),
+          _buildExportPdfSection(context),
+        ],
+      ),
+    );
+  }
+
+  /// Sección destacada para exportar a PDF
+  Widget _buildExportPdfSection(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.primaryGreen,
+            AppTheme.primaryDarkGreen,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryGreen.withOpacity(0.4),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.picture_as_pdf_rounded,
+                color: AppTheme.white,
+                size: 28,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Exportar reporte',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: AppTheme.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Descarga el reporte en formato PDF para compartir o archivar',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: AppTheme.white.withOpacity(0.9),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Material(
+            color: AppTheme.white,
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              onTap: _isDownloadingPdf ? null : _descargarPdf,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_isDownloadingPdf)
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppTheme.primaryGreen,
+                        ),
+                      )
+                    else
+                      Icon(Icons.download_rounded,
+                          color: AppTheme.primaryGreen, size: 22),
+                    const SizedBox(width: 10),
+                    Text(
+                      _isDownloadingPdf ? 'Descargando...' : 'Descargar PDF',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryGreen,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ],

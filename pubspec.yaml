@@ -48,8 +48,7 @@ dependencies:
   connectivity_plus: ^5.0.2
   image_picker: ^1.0.7
   path_provider: ^2.1.1
-  open_file: ^3.3.2
-
+  
   # Gráficos para reportes
   fl_chart: ^0.66.0
 

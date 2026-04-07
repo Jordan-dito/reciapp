@@ -1,12 +1,9 @@
-import 'dart:io';
 import '../../core/config/app_config.dart';
 import '../../core/network/api_client.dart';
 import '../../core/errors/api_exceptions.dart';
 import '../models/sucursal_model.dart';
 import '../models/categoria_porcentaje_model.dart';
 import '../models/sucursal_gastos_compras_model.dart';
-import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
 
 class ReportsRemoteDataSource {
   final ApiClient apiClient;
@@ -235,107 +232,5 @@ class ReportsRemoteDataSource {
         originalError: e,
       );
     }
-  }
-
-  /// Obtiene sucursales activas (para filtro de reportes)
-  Future<List<SucursalModel>> getSucursalesActivas() async {
-    final response = await apiClient.get(
-      AppConfig.sucursalesEndpoint,
-      queryParams: {'action': 'activas'},
-    );
-    if (!response.success) {
-      throw ConnectionException(response.error ?? 'Error al obtener sucursales');
-    }
-    if (response.data!['success'] != true) {
-      throw ConnectionException(
-        response.data!['message'] as String? ?? 'Error al obtener sucursales',
-      );
-    }
-    final list = response.data!['data'] as List<dynamic>? ?? [];
-    return list.map((j) => SucursalModel.fromJson(j as Map<String, dynamic>)).toList();
-  }
-
-  /// Obtiene vista previa del reporte según FLUTTER_REPORTES_API.md
-  Future<Map<String, dynamic>> getReporteVistaPrevia({
-    required int usuarioId,
-    required String tipo,
-    String? fechaDesde,
-    String? fechaHasta,
-    int? sucursalId,
-    int? rolId,
-    String? material,
-  }) async {
-    final params = <String, String>{
-      'action': 'vista_previa',
-      'tipo': tipo,
-      'usuario_id': usuarioId.toString(),
-    };
-    if (fechaDesde != null && fechaDesde.isNotEmpty) params['fecha_desde'] = fechaDesde;
-    if (fechaHasta != null && fechaHasta.isNotEmpty) params['fecha_hasta'] = fechaHasta;
-    if (sucursalId != null) params['sucursal_id'] = sucursalId.toString();
-    if (rolId != null) params['rol_id'] = rolId.toString();
-    if (material != null && material.isNotEmpty) params['material'] = material;
-
-    final response = await apiClient.get(
-      AppConfig.reportesApiEndpoint,
-      queryParams: params,
-    );
-
-    if (!response.success) {
-      throw ConnectionException(response.error ?? 'Error al obtener reporte');
-    }
-    if (response.data == null) {
-      throw ConnectionException('Respuesta inválida del servidor');
-    }
-    return response.data!;
-  }
-
-  /// Obtiene lista de roles (para reporte de usuarios)
-  Future<List<Map<String, dynamic>>> getRoles() async {
-    final response = await apiClient.get(AppConfig.rolesEndpoint);
-    if (!response.success) {
-      return [];
-    }
-    if (response.data!['success'] != true) {
-      return [];
-    }
-    final list = response.data!['data'] as List<dynamic>? ?? [];
-    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-  }
-
-  /// Descarga el reporte en PDF y devuelve la ruta al archivo
-  Future<String> downloadReportePdf({
-    required int usuarioId,
-    required String tipo,
-    String? fechaDesde,
-    String? fechaHasta,
-    int? sucursalId,
-    int? rolId,
-    String? material,
-  }) async {
-    final params = <String, String>{
-      'tipo': tipo,
-      'usuario_id': usuarioId.toString(),
-    };
-    if (fechaDesde != null && fechaDesde.isNotEmpty) params['fecha_desde'] = fechaDesde;
-    if (fechaHasta != null && fechaHasta.isNotEmpty) params['fecha_hasta'] = fechaHasta;
-    if (sucursalId != null) params['sucursal_id'] = sucursalId.toString();
-    if (rolId != null) params['rol_id'] = rolId.toString();
-    if (material != null && material.isNotEmpty) params['material'] = material;
-
-    final uri = Uri.parse('${apiClient.baseUrl}${AppConfig.reportesPdfEndpoint}')
-        .replace(queryParameters: params);
-
-    final response = await http.get(uri);
-    if (response.statusCode != 200) {
-      throw ConnectionException(
-        'Error al descargar PDF: ${response.statusCode}',
-      );
-    }
-    final dir = await getTemporaryDirectory();
-    final fileName = 'reporte_${tipo}_${DateTime.now().millisecondsSinceEpoch}.pdf';
-    final file = File('${dir.path}/$fileName');
-    await file.writeAsBytes(response.bodyBytes);
-    return file.path;
   }
 }
