@@ -40,6 +40,8 @@ class AppConfig {
   static const String sucursalesEndpoint = '/sucursales/api.php'; // Endpoint para obtener sucursales disponibles
   static const String porcentajesCategoriasEndpoint = '/config/porcentajes_categorias.php'; // Endpoint para obtener porcentajes de categorías
   static const String graficosEndpoint = '/reportes/api_graficos.php'; // Endpoint para gráficos por sucursal (action=gastos_compras_por_sucursal)
+  static const String reportesApiEndpoint = '/reportes/api.php'; // Endpoint para reportes (vista previa y PDF)
+  static const String rolesEndpoint = '/roles/api.php'; // Endpoint para obtener roles
 
   // Rutas de la app
   static const String loginRoute = '/login';
