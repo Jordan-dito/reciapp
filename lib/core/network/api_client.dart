@@ -94,10 +94,6 @@ class ApiClient {
         }
       }
       
-      print('📤 Enviando POST a: $uri');
-      print('📦 Headers: $requestHeaders');
-      print('📦 Body: $requestBody');
-      
       final response = await http.post(
         uri,
         headers: requestHeaders,
@@ -105,12 +101,9 @@ class ApiClient {
       ).timeout(
         const Duration(seconds: 30),
         onTimeout: () {
-          print('⏱️ Timeout después de 30 segundos');
           throw TimeoutException('La petición tardó demasiado. Verifica tu conexión.');
         },
       );
-      
-      print('📥 Respuesta recibida - Status: ${response.statusCode}, Body length: ${response.body.length}');
 
       return _handleResponse(response);
     } catch (e) {
@@ -201,20 +194,14 @@ class ApiClient {
 
   /// Maneja la respuesta HTTP y la convierte en ApiResponse
   ApiResponse _handleResponse(http.Response response) {
-    print('📋 _handleResponse - Status: ${response.statusCode}, Body: ${response.body}');
-    
-    // Si el status code indica error, manejar según el código
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      print('❌ Status code de error: ${response.statusCode}');
       try {
-        // Intentar parsear como JSON para obtener el mensaje de error
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final message = data['message'] as String? ?? 
-                         data['error'] as String? ??
-                         'Error ${response.statusCode}: ${response.reasonPhrase}';
+        final message = data['message'] as String? ??
+            data['error'] as String? ??
+            'Error ${response.statusCode}: ${response.reasonPhrase}';
         return ApiResponse.error(message, statusCode: response.statusCode);
       } catch (e) {
-        // Si no es JSON válido, usar el mensaje del status code
         final apiError = ApiErrorException.fromStatusCode(
           response.statusCode,
           response.reasonPhrase,
@@ -222,32 +209,20 @@ class ApiClient {
         return ApiResponse.error(apiError.message, statusCode: response.statusCode);
       }
     }
-    
-    // Status code exitoso (200-299)
-    print('✅ Status code exitoso, parseando JSON...');
+
     try {
-      // Intentar parsear como JSON
       if (response.body.isEmpty) {
-        print('⚠️ Body vacío');
         return ApiResponse.success({}, statusCode: response.statusCode);
       }
-      
-      print('📄 Parseando body: ${response.body}');
+
       final data = jsonDecode(response.body);
-      print('✅ JSON parseado: $data');
-      
-      // Si es un Map, devolverlo directamente
+
       if (data is Map<String, dynamic>) {
-        print('✅ Es un Map, retornando success');
         return ApiResponse.success(data, statusCode: response.statusCode);
       }
-      
-      // Si es otro tipo, envolverlo en un Map
-      print('⚠️ No es Map, envolviendo en data');
+
       return ApiResponse.success({'data': data}, statusCode: response.statusCode);
     } catch (e) {
-      print('❌ Error parseando JSON: $e');
-      // Si no es JSON válido pero el status es exitoso, devolver el body como texto
       return ApiResponse.success({'data': response.body}, statusCode: response.statusCode);
     }
   }

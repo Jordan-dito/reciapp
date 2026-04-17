@@ -34,24 +34,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthState>(
-      listener: (context, state) {
-        // Forzar actualización cuando cambia el estado de autenticación
-        if (state is AuthAuthenticated) {
-          print(
-              '🔄 Estado de autenticación actualizado - Foto: ${state.user.fotoPerfil}');
-        }
-      },
+      listener: (context, state) {},
       child: BlocBuilder<AuthBloc, AuthState>(
         builder: (context, state) {
           if (state is AuthAuthenticated) {
             final user = state.user;
-
-            // Debug: imprimir información de la foto
-            if (user.fotoPerfil != null) {
-              print('📷 Foto de perfil del usuario: ${user.fotoPerfil}');
-            } else {
-              print('⚠️ Usuario no tiene foto de perfil');
-            }
 
             return SafeArea(
               child: SingleChildScrollView(
@@ -103,9 +90,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   );
                                 },
                                 errorBuilder: (context, error, stackTrace) {
-                                  // Si hay error al cargar, mostrar avatar por defecto
-                                  print('❌ Error al cargar imagen: $error');
-                                  print('📷 URL intentada: ${user.fotoPerfil}');
                                   return Container(
                                     color: AppTheme.primaryGreen,
                                     child: const Icon(

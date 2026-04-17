@@ -38,7 +38,7 @@ class _ReportesApiScreenState extends State<ReportesApiScreen> {
   DateTime? _fechaHasta;
   SucursalModel? _sucursalSeleccionada;
   int? _rolId;
-  String _material = '';
+  final String _material = '';
 
   List<SucursalModel> _sucursales = [];
   List<Map<String, dynamic>> _roles = [];
@@ -205,7 +205,7 @@ class _ReportesApiScreenState extends State<ReportesApiScreen> {
         final xFile = XFile(
           result.path,
           mimeType: 'application/pdf',
-          name: 'reporte_${_tipoSeleccionado}.pdf',
+          name: 'reporte_$_tipoSeleccionado.pdf',
         );
         await Share.shareXFiles(
           [xFile],

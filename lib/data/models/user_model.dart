@@ -30,19 +30,7 @@ class UserModel extends User {
       if (value == null) return null;
       final str = value.toString().trim();
       if (str.isEmpty) return null;
-      
-      // Si la URL ya es completa y no contiene localhost, retornarla tal cual
-      if (str.startsWith('http://') || str.startsWith('https://')) {
-        if (!str.contains('localhost') && !str.contains('127.0.0.1')) {
-          print('✅ URL de foto ya es completa: $str');
-          return str;
-        }
-      }
-      
-      // Normalizar la URL para usar el dominio real en lugar de localhost
-      final normalized = AppConfig.normalizeImageUrl(str);
-      print('🔄 URL normalizada: $str -> $normalized');
-      return normalized;
+      return AppConfig.normalizeImageUrl(str);
     }
 
     return UserModel(

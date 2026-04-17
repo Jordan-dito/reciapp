@@ -16,7 +16,7 @@ class SucursalGastosComprasModel {
   });
 
   factory SucursalGastosComprasModel.fromJson(Map<String, dynamic> json) {
-    double _toDouble(dynamic v) {
+    double toDouble(dynamic v) {
       if (v == null) return 0.0;
       if (v is num) return v.toDouble();
       return double.tryParse(v.toString()) ?? 0.0;
@@ -27,10 +27,10 @@ class SucursalGastosComprasModel {
           int.tryParse(json['sucursal_id']?.toString() ?? '') ??
           0,
       sucursalNombre: json['sucursal_nombre']?.toString() ?? '',
-      totalGasto: _toDouble(json['total_gasto']),
-      totalCompra: _toDouble(json['total_compra']),
-      totalVenta: _toDouble(json['total_venta']),
-      ganancia: _toDouble(json['ganancia']),
+      totalGasto: toDouble(json['total_gasto']),
+      totalCompra: toDouble(json['total_compra']),
+      totalVenta: toDouble(json['total_venta']),
+      ganancia: toDouble(json['ganancia']),
     );
   }
 
