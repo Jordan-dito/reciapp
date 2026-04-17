@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:go_router/go_router.dart';
@@ -17,13 +19,21 @@ import 'data/datasources/auth_local_datasource.dart';
 import 'data/datasources/auth_remote_datasource.dart';
 
 Future<void> main() async {
-  // Mantener el splash nativo visible hasta que Flutter esté completamente listo
-  WidgetsFlutterBinding.ensureInitialized();
-  FlutterNativeSplash.preserve(
-      widgetsBinding: WidgetsFlutterBinding.ensureInitialized());
+  final binding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: binding);
 
-  // Cargar variables de entorno desde el archivo .env
-  await dotenv.load(fileName: '.env');
+  // Cargar variables de entorno desde el asset .env (obligatorio en release)
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (e, st) {
+    try {
+      final raw = await rootBundle.loadString('.env');
+      dotenv.testLoad(fileInput: raw);
+    } catch (_) {
+      debugPrint('Error cargando .env: $e\n$st');
+      rethrow;
+    }
+  }
 
   // Inicializar formato de fecha para español
   await initializeDateFormatting('es', null);
@@ -39,9 +49,12 @@ class RecicladoraApp extends StatefulWidget {
 }
 
 class _RecicladoraAppState extends State<RecicladoraApp> {
+  final GlobalKey<NavigatorState> _rootNavigatorKey =
+      GlobalKey<NavigatorState>();
   GoRouter? _router;
   bool _splashRemoved = false;
   bool _routerInitialized = false;
+  bool _startupFlowScheduled = false;
 
   @override
   void initState() {
@@ -57,7 +70,10 @@ class _RecicladoraAppState extends State<RecicladoraApp> {
 
   void _initializeRouter(BuildContext context) {
     if (!_routerInitialized) {
-      _router = AppRouter.createRouter(context);
+      _router = AppRouter.createRouter(
+        context,
+        navigatorKey: _rootNavigatorKey,
+      );
       AppRouter.setRouter(_router!);
       _routerInitialized = true;
     }
@@ -98,96 +114,16 @@ class _RecicladoraAppState extends State<RecicladoraApp> {
           ),
         ],
         child: Builder(
-          builder: (context) {
-            // Inicializar el router solo una vez
-            _initializeRouter(context);
+          builder: (scopedContext) {
+            _initializeRouter(scopedContext);
 
-            // Verificar si hay una sesión guardada al iniciar la app
-            Future.microtask(() async {
-              if (mounted && !_splashRemoved) {
-                // Verificar conectividad a internet
-                final connectivityService = ConnectivityService();
-                final hasConnection =
-                    await connectivityService.hasInternetConnection();
+            if (!_startupFlowScheduled) {
+              _startupFlowScheduled = true;
+              SchedulerBinding.instance.addPostFrameCallback((_) {
+                _runStartupFlow(scopedContext);
+              });
+            }
 
-                if (!hasConnection && mounted) {
-                  // Mostrar diálogo de advertencia si no hay conexión
-                  FlutterNativeSplash.remove();
-                  _splashRemoved = true;
-
-                  // Esperar a que el contexto esté disponible para mostrar el diálogo
-                  await Future.delayed(const Duration(milliseconds: 300));
-
-                  if (mounted) {
-                    showDialog(
-                      context: context,
-                      barrierDismissible: false,
-                      builder: (context) => AlertDialog(
-                        title: const Row(
-                          children: [
-                            Icon(Icons.wifi_off, color: Colors.orange),
-                            SizedBox(width: 8),
-                            Text('Sin conexión a internet'),
-                          ],
-                        ),
-                        content: const Text(
-                          'No se detectó conexión a internet. Algunas funciones de la aplicación pueden no estar disponibles.\n\n'
-                          'Por favor, verifica tu conexión Wi-Fi o datos móviles.',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                              // Verificar el estado de autenticación guardado
-                              context
-                                  .read<AuthBloc>()
-                                  .add(const CheckAuthStatusEvent());
-                              // Navegar según el estado
-                              Future.delayed(const Duration(milliseconds: 500),
-                                  () {
-                                if (mounted) {
-                                  final authState =
-                                      context.read<AuthBloc>().state;
-                                  if (authState is AuthAuthenticated) {
-                                    _router?.go(AppConfig.homeRoute);
-                                  } else {
-                                    _router?.go(AppConfig.loginRoute);
-                                  }
-                                }
-                              });
-                            },
-                            child: const Text('Continuar'),
-                          ),
-                        ],
-                      ),
-                    );
-                    return;
-                  }
-                }
-
-                // Verificar el estado de autenticación guardado
-                context.read<AuthBloc>().add(const CheckAuthStatusEvent());
-
-                // Esperar un momento para que se complete la verificación
-                await Future.delayed(const Duration(milliseconds: 500));
-
-                if (mounted) {
-                  FlutterNativeSplash.remove();
-                  _splashRemoved = true;
-
-                  // El router redirigirá automáticamente según el estado de autenticación
-                  final authState = context.read<AuthBloc>().state;
-                  if (authState is AuthAuthenticated) {
-                    _router?.go(AppConfig.homeRoute);
-                  } else {
-                    _router?.go(AppConfig.loginRoute);
-                  }
-                }
-              }
-            });
-
-            // El redirect del router manejará la navegación automáticamente
-            // Asegurarse de que el router esté inicializado
             if (_router == null) {
               return const Center(child: CircularProgressIndicator());
             }
@@ -202,5 +138,79 @@ class _RecicladoraAppState extends State<RecicladoraApp> {
         ),
       ),
     );
+  }
+
+  Future<void> _runStartupFlow(BuildContext scopedContext) async {
+    if (!mounted || _splashRemoved) return;
+
+    final connectivityService = ConnectivityService();
+    final hasConnection = await connectivityService.hasInternetConnection();
+
+    if (!mounted || !scopedContext.mounted) return;
+
+    if (!hasConnection) {
+      FlutterNativeSplash.remove();
+      _splashRemoved = true;
+
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      if (!mounted || !scopedContext.mounted) return;
+
+      final dialogContext = _rootNavigatorKey.currentContext;
+      if (dialogContext == null) return;
+
+      showDialog<void>(
+        context: dialogContext,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.wifi_off, color: Colors.orange),
+              SizedBox(width: 8),
+              Text('Sin conexión a internet'),
+            ],
+          ),
+          content: const Text(
+            'No se detectó conexión a internet. Algunas funciones de la aplicación pueden no estar disponibles.\n\n'
+            'Por favor, verifica tu conexión Wi-Fi o datos móviles.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                scopedContext.read<AuthBloc>().add(const CheckAuthStatusEvent());
+                Future.delayed(const Duration(milliseconds: 500), () {
+                  if (!mounted || !scopedContext.mounted) return;
+                  final authState = scopedContext.read<AuthBloc>().state;
+                  if (authState is AuthAuthenticated) {
+                    _router?.go(AppConfig.homeRoute);
+                  } else {
+                    _router?.go(AppConfig.loginRoute);
+                  }
+                });
+              },
+              child: const Text('Continuar'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    scopedContext.read<AuthBloc>().add(const CheckAuthStatusEvent());
+
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    if (!mounted || !scopedContext.mounted) return;
+
+    FlutterNativeSplash.remove();
+    _splashRemoved = true;
+
+    final authState = scopedContext.read<AuthBloc>().state;
+    if (authState is AuthAuthenticated) {
+      _router?.go(AppConfig.homeRoute);
+    } else {
+      _router?.go(AppConfig.loginRoute);
+    }
   }
 }

@@ -25,7 +25,7 @@ class AppConfig {
             'Por favor, configura tu dominio de desarrollo.');
       }
       return url;
-    }
+    } 
   }
 
   /// Verifica si estamos en modo producción

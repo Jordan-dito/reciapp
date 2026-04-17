@@ -63,31 +63,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   Future<void> _loadSucursales() async {
-    print('🔄 [ReportsScreen] Iniciando carga de sucursales...');
     setState(() {
       _isLoadingSucursales = true;
     });
 
     try {
       final sucursales = await _reportsDataSource.getSucursalesDisponibles();
-      print(
-          '✅ [ReportsScreen] Sucursales cargadas exitosamente: ${sucursales.length}');
-
       setState(() {
         _sucursales = sucursales;
         if (_sucursales.isNotEmpty && _selectedSucursal == null) {
           _selectedSucursal = _sucursales.first.id.toString();
-          print(
-              '📌 [ReportsScreen] Sucursal seleccionada por defecto: ${_sucursales.first.nombre} (ID: $_selectedSucursal)');
         }
         _isLoadingSucursales = false;
       });
-
-      print(
-          '✅ [ReportsScreen] Estado actualizado con ${_sucursales.length} sucursales');
     } catch (e) {
-      print('❌ [ReportsScreen] Error al cargar sucursales: $e');
-      print('❌ [ReportsScreen] Stack trace: ${StackTrace.current}');
       setState(() {
         _isLoadingSucursales = false;
       });
@@ -103,8 +92,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   Future<void> _loadGastosCompras() async {
-    print('🔄 [ReportsScreen] Iniciando carga de gastos/compras por sucursal...');
-
     setState(() {
       _isLoadingGastosCompras = true;
     });
@@ -118,54 +105,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
         anio: anio,
       );
 
-      print('✅ [ReportsScreen] Gastos/Compras recibidos: ${items.length}');
-
       setState(() {
         _sucursalGastosCompras = items;
         _isLoadingGastosCompras = false;
       });
     } catch (e) {
-      print('❌ [ReportsScreen] Error al obtener gastos/compras: $e');
-      print('ℹ️ [ReportsScreen] Usando datos de ejemplo para el gráfico de dispersión');
-      
-      // Usar datos mock de ejemplo cuando el endpoint no está disponible
-      final mockData = [
-        SucursalGastosComprasModel(
-          sucursalId: 1,
-          sucursalNombre: 'Sucursal Centro',
-          totalGasto: 1500.50,
-          totalCompra: 3200.00,
-          totalVenta: 4500.00,
-          ganancia: 1300.00,
-        ),
-        SucursalGastosComprasModel(
-          sucursalId: 2,
-          sucursalNombre: 'Sucursal Norte',
-          totalGasto: 2100.00,
-          totalCompra: 4800.00,
-          totalVenta: 6200.00,
-          ganancia: 1400.00,
-        ),
-        SucursalGastosComprasModel(
-          sucursalId: 3,
-          sucursalNombre: 'Sucursal Sur',
-          totalGasto: 1800.75,
-          totalCompra: 2900.00,
-          totalVenta: 3900.00,
-          ganancia: 1000.00,
-        ),
-        SucursalGastosComprasModel(
-          sucursalId: 4,
-          sucursalNombre: 'Sucursal Este',
-          totalGasto: 2500.00,
-          totalCompra: 5500.00,
-          totalVenta: 7200.00,
-          ganancia: 1700.00,
-        ),
-      ];
-      
       setState(() {
-        _sucursalGastosCompras = mockData;
+        _sucursalGastosCompras = [];
         _isLoadingGastosCompras = false;
       });
     }
@@ -247,17 +193,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   Future<void> _loadReportsData() async {
-    if (_selectedSucursal == null) {
-      print(
-          '⚠️ [ReportsScreen] No se puede cargar datos: sucursal no seleccionada');
-      return;
-    }
-
-    print('🔄 [ReportsScreen] Iniciando carga de datos de reportes...');
-    print('📋 [ReportsScreen] Filtros aplicados:');
-    print('   - Mes: $_selectedMonth (${_meses[_selectedMonth - 1]})');
-    print('   - Año: $_selectedYear');
-    print('   - Sucursal ID: $_selectedSucursal');
+    if (_selectedSucursal == null) return;
 
     setState(() {
       _isLoadingCategorias = true;
@@ -265,7 +201,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
     try {
       final sucursalId = int.tryParse(_selectedSucursal!);
-      print('📡 [ReportsScreen] Llamando a getPorcentajesCategorias...');
 
       final result = await _reportsDataSource.getPorcentajesCategorias(
         anio: _selectedYear,
@@ -275,39 +210,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
       final categorias = result['categorias'] as List<CategoriaPorcentajeModel>;
       final totalCantidad = result['total_cantidad'] as double;
-      final filtros = result['filtros'] as Map<String, dynamic>?;
 
-      print('✅ [ReportsScreen] Datos recibidos exitosamente:');
-      print('   - Total categorías: ${categorias.length}');
-      print('   - Total cantidad: $totalCantidad kg');
-      print('   - Filtros recibidos: $filtros');
-
-      // Verificar si todas las categorías tienen valores en cero
+      // Limpiar categorías si todas son cero para mostrar estado vacío
       final allZero =
           categorias.every((cat) => cat.cantidad == 0 || cat.porcentaje == 0);
-
-      if (categorias.isNotEmpty && !allZero) {
-        print('📊 [ReportsScreen] Detalle completo de categorías desde BD:');
-        for (var i = 0; i < categorias.length; i++) {
-          final cat = categorias[i];
-          print('   ${i + 1}. Categoría desde BD:');
-          print('      - categoria_id: ${cat.categoriaId}');
-          print('      - categoria_nombre: "${cat.categoriaNombre}"');
-          print('      - cantidad: ${cat.cantidad} kg');
-          print('      - porcentaje: ${cat.porcentaje}%');
-          print('      - Índice en array: $i');
-        }
-      } else {
-        if (categorias.isEmpty) {
-          print(
-              '⚠️ [ReportsScreen] No se encontraron categorías para los filtros seleccionados');
-        } else {
-          print(
-              '⚠️ [ReportsScreen] Todas las categorías tienen valores en cero');
-        }
-        // Limpiar categorías si todas son cero para mostrar estado vacío
-        categorias.clear();
-      }
+      if (allZero) categorias.clear();
 
       setState(() {
         _categorias = categorias;
@@ -315,14 +222,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
         _isLoadingCategorias = false;
       });
 
-      // También actualizar los datos de gastos/compras por sucursal para el periodo seleccionado
       _loadGastosCompras();
-
-      print(
-          '✅ [ReportsScreen] Estado actualizado con ${_categorias.length} categorías');
     } catch (e) {
-      print('❌ [ReportsScreen] Error al cargar porcentajes: $e');
-      print('❌ [ReportsScreen] Stack trace: ${StackTrace.current}');
       setState(() {
         _isLoadingCategorias = false;
       });
@@ -467,6 +368,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   // Resumen general mejorado
                   _ModernSummaryCard(
                     selectedDate: _selectedDate,
+                    totalKg: _totalCantidad,
+                    totalVentas: _sucursalGastosCompras.fold(
+                        0.0, (sum, s) => sum + s.totalVenta),
                   ),
                   const SizedBox(height: 16),
                   // Gráfico de distribución de materiales (mejorado)
@@ -502,11 +406,19 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
 class _ModernSummaryCard extends StatelessWidget {
   final DateTime selectedDate;
+  final double totalKg;
+  final double totalVentas;
 
-  const _ModernSummaryCard({required this.selectedDate});
+  const _ModernSummaryCard({
+    required this.selectedDate,
+    required this.totalKg,
+    required this.totalVentas,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final numberFormat = NumberFormat('#,##0.##', 'es');
+
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -567,7 +479,7 @@ class _ModernSummaryCard extends StatelessWidget {
                 Expanded(
                   child: _SummaryStat(
                     icon: Icons.recycling,
-                    value: '2,450',
+                    value: numberFormat.format(totalKg),
                     unit: 'kg',
                     label: 'Total Reciclado',
                   ),
@@ -581,9 +493,9 @@ class _ModernSummaryCard extends StatelessWidget {
                 Expanded(
                   child: _SummaryStat(
                     icon: Icons.attach_money,
-                    value: '12,345',
+                    value: numberFormat.format(totalVentas),
                     unit: '\$',
-                    label: 'Ingresos',
+                    label: 'Ventas',
                   ),
                 ),
               ],
@@ -783,15 +695,6 @@ class _DistributionChartCard extends StatelessWidget {
         ),
       );
     }
-    print(
-        '🎨 [DistributionChart] Construyendo gráfico con ${categorias.length} categorías');
-    print('📊 [DistributionChart] Datos de categorías desde la base de datos:');
-    for (var i = 0; i < categorias.length; i++) {
-      final cat = categorias[i];
-      print(
-          '   ${i + 1}. ID: ${cat.categoriaId} | Nombre: "${cat.categoriaNombre}" | Porcentaje: ${cat.porcentaje}% | Cantidad: ${cat.cantidad} kg');
-    }
-
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -850,8 +753,6 @@ class _DistributionChartCard extends StatelessWidget {
                             sectionsSpace: 2,
                             centerSpaceRadius: 55,
                             sections: categorias.asMap().entries.map((entry) {
-                              print(
-                                  '📊 [DistributionChart] Renderizando ${entry.value.categoriaNombre}: ${entry.value.porcentaje}%');
                               final index = entry.key;
                               final categoria = entry.value;
                               final color = _getColorForIndex(index);
@@ -869,65 +770,21 @@ class _DistributionChartCard extends StatelessWidget {
                                 ),
                               );
                             }).toList(),
-                            // Configuración de tooltip al tocar
                             pieTouchData: PieTouchData(
-                              enabled: true, // Habilitar interacciones táctiles
+                              enabled: true,
                               touchCallback:
                                   (FlTouchEvent event, pieTouchResponse) {
-                                print('👆 [DistributionChart] Touch detectado');
-                                print('   - Event type: ${event.runtimeType}');
-                                print(
-                                    '   - IsInterested: ${event.isInterestedForInteractions}');
-                                print(
-                                    '   - Response: ${pieTouchResponse != null}');
+                                if (!event.isInterestedForInteractions) return;
+                                if (pieTouchResponse?.touchedSection == null) return;
 
-                                if (!event.isInterestedForInteractions) {
-                                  print(
-                                      '⚠️ [DistributionChart] Event no interesado en interacciones');
-                                  return;
-                                }
-
-                                if (pieTouchResponse == null) {
-                                  print(
-                                      '⚠️ [DistributionChart] Response es null');
-                                  return;
-                                }
-
-                                if (pieTouchResponse.touchedSection == null) {
-                                  print(
-                                      '⚠️ [DistributionChart] No hay sección tocada');
-                                  return;
-                                }
-
-                                final touchedIndex = pieTouchResponse
+                                final touchedIndex = pieTouchResponse!
                                     .touchedSection!.touchedSectionIndex;
-
-                                print(
-                                    '✅ [DistributionChart] Índice tocado: $touchedIndex');
-                                print(
-                                    '   - Total categorías: ${categorias.length}');
 
                                 if (touchedIndex >= 0 &&
                                     touchedIndex < categorias.length) {
                                   final categoria = categorias[touchedIndex];
-
-                                  print(
-                                      '📋 [DistributionChart] Categoría seleccionada:');
-                                  print('   - ID: ${categoria.categoriaId}');
-                                  print(
-                                      '   - Nombre: ${categoria.categoriaNombre}');
-                                  print(
-                                      '   - Porcentaje: ${categoria.porcentaje}%');
-                                  print(
-                                      '   - Cantidad: ${categoria.cantidad} kg');
-
-                                  // Mostrar tooltip con el nombre de la categoría
                                   final message =
                                       '${categoria.categoriaNombre}: ${categoria.porcentaje.toStringAsFixed(1)}% (${categoria.cantidad.toStringAsFixed(2)} kg)';
-                                  print(
-                                      '💬 [DistributionChart] Mostrando mensaje: $message');
-                                  print(
-                                      '🎯 [DistributionChart] Context disponible: ${context.mounted}');
 
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
@@ -952,15 +809,7 @@ class _DistributionChartCard extends StatelessWidget {
                                         ),
                                       ),
                                     );
-                                    print(
-                                        '✅ [DistributionChart] SnackBar mostrado exitosamente');
-                                  } else {
-                                    print(
-                                        '❌ [DistributionChart] Context no está montado, no se puede mostrar SnackBar');
                                   }
-                                } else {
-                                  print(
-                                      '❌ [DistributionChart] Índice fuera de rango: $touchedIndex (rango: 0-${categorias.length - 1})');
                                 }
                               },
                             ),

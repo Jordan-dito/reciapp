@@ -9,11 +9,15 @@ import '../../presentation/bloc/auth/auth_state.dart';
 import '../config/app_config.dart';
 
 class AppRouter {
-  static GoRouter createRouter(BuildContext context) {
+  static GoRouter createRouter(
+    BuildContext context, {
+    GlobalKey<NavigatorState>? navigatorKey,
+  }) {
     // Crear un StreamNotifier para escuchar cambios del AuthBloc
     final authStreamNotifier = _AuthStreamNotifier(context);
 
     return GoRouter(
+      navigatorKey: navigatorKey,
       initialLocation: AppConfig.loginRoute,
       refreshListenable: authStreamNotifier,
       routes: [

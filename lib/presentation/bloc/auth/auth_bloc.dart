@@ -88,7 +88,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     } catch (e) {
       // Si falla el refresh, mantener el estado actual
       // No emitir error para no interrumpir la experiencia del usuario
-      print('⚠️ Error al refrescar usuario: $e');
+      // Si falla el refresh, mantener el estado actual
     }
   }
 }

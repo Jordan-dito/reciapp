@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import '../../core/config/app_config.dart';
 import '../../core/network/api_client.dart';
 import '../../core/errors/api_exceptions.dart';
@@ -14,49 +17,21 @@ class ReportsRemoteDataSource {
   /// NOTA: Según la documentación, este endpoint NO requiere autenticación
   Future<List<SucursalModel>> getSucursalesDisponibles() async {
     try {
-      print('📡 [ReportsDataSource] Obteniendo sucursales disponibles...');
-      print(
-          '🌐 URL: ${apiClient.baseUrl}${AppConfig.sucursalesEndpoint}?action=disponibles');
-      print(
-          'ℹ️ [ReportsDataSource] Este endpoint NO requiere autenticación según documentación');
-
-      // Hacer la petición sin token de autenticación (según documentación)
       final response = await apiClient.get(
         AppConfig.sucursalesEndpoint,
         queryParams: {'action': 'disponibles'},
       );
 
-      print('📥 [ReportsDataSource] Respuesta recibida:');
-      print('   - Success: ${response.success}');
-      print('   - Status Code: ${response.statusCode}');
-      print('   - Data: ${response.data}');
-
       if (!response.success) {
         final message = response.error ?? 'Error al obtener sucursales';
-        print('❌ [ReportsDataSource] Error en respuesta: $message');
         throw ConnectionException(message);
       }
 
       if (response.data!['success'] == true) {
         final List<dynamic> sucursalesJson = response.data!['data'] ?? [];
-        print(
-            '✅ [ReportsDataSource] Sucursales encontradas: ${sucursalesJson.length}');
-
-        final sucursales =
-            sucursalesJson.map((json) => SucursalModel.fromJson(json)).toList();
-
-        // Log detallado de cada sucursal
-        for (var i = 0; i < sucursales.length; i++) {
-          final s = sucursales[i];
-          print(
-              '   ${i + 1}. ID: ${s.id}, Nombre: ${s.nombre}, Estado: ${s.estado}');
-        }
-
-        return sucursales;
+        return sucursalesJson.map((json) => SucursalModel.fromJson(json)).toList();
       } else {
-        final message = response.data!['message'] as String? ??
-            'Error al obtener sucursales';
-        print('❌ [ReportsDataSource] Error en data: $message');
+        final message = response.data!['message'] as String? ?? 'Error al obtener sucursales';
         throw ConnectionException(message);
       }
     } on ApiException {
@@ -81,75 +56,34 @@ class ReportsRemoteDataSource {
     int? sucursalId,
   }) async {
     try {
-      print('📡 [ReportsDataSource] Obteniendo porcentajes de categorías...');
-      print(
-          '🌐 URL: ${apiClient.baseUrl}${AppConfig.porcentajesCategoriasEndpoint}');
-      print('📋 Parámetros:');
-      print('   - Año: $anio');
-      print('   - Mes: $mes');
-      print('   - Sucursal ID: ${sucursalId ?? "Todas"}');
-
-      // Según MENSAJE_FLUTTER.md, el body debe ser JSON con números (int), no strings
       final body = <String, dynamic>{
-        'anio': anio, // Enviar como int, no como string
-        'mes': mes, // Enviar como int, no como string
+        'anio': anio,
+        'mes': mes,
       };
 
       if (sucursalId != null) {
-        body['sucursal_id'] = sucursalId; // Enviar como int, no como string
+        body['sucursal_id'] = sucursalId;
       }
 
-      print('📦 Body enviado (JSON con números): $body');
-      print(
-          'ℹ️ [ReportsDataSource] Este endpoint NO requiere autenticación según MENSAJE_FLUTTER.md');
-
-      // Según MENSAJE_FLUTTER.md:
-      // - NO requiere autenticación
-      // - Debe enviarse como JSON (Content-Type: application/json)
-      // - Los valores deben ser números (int), no strings
       final response = await apiClient.post(
         AppConfig.porcentajesCategoriasEndpoint,
         body: body,
-        useFormData: false, // Enviar como JSON según documentación
+        useFormData: false,
       );
 
-      print('📥 [ReportsDataSource] Respuesta recibida:');
-      print('   - Success: ${response.success}');
-      print('   - Status Code: ${response.statusCode}');
-      print('   - Data completo: ${response.data}');
-
       if (!response.success) {
-        final message =
-            response.error ?? 'Error al obtener porcentajes de categorías';
-        print('❌ [ReportsDataSource] Error en respuesta: $message');
+        final message = response.error ?? 'Error al obtener porcentajes de categorías';
         throw ConnectionException(message);
       }
 
       if (response.data!['success'] == true) {
         final List<dynamic> categoriasJson = response.data!['categorias'] ?? [];
-        print(
-            '✅ [ReportsDataSource] Categorías encontradas: ${categoriasJson.length}');
-
         final totalCantidad =
             (response.data!['total_cantidad'] as num?)?.toDouble() ?? 0.0;
-        print('📊 [ReportsDataSource] Total cantidad: $totalCantidad kg');
-
         final categorias = categoriasJson
             .map((json) => CategoriaPorcentajeModel.fromJson(json))
             .toList();
-
-        // Log detallado de cada categoría
-        print('📋 [ReportsDataSource] Detalle de categorías:');
-        for (var i = 0; i < categorias.length; i++) {
-          final cat = categorias[i];
-          print('   ${i + 1}. ${cat.categoriaNombre}:');
-          print('      - ID: ${cat.categoriaId}');
-          print('      - Cantidad: ${cat.cantidad} kg');
-          print('      - Porcentaje: ${cat.porcentaje}%');
-        }
-
         final filtros = response.data!['filtros'] ?? {};
-        print('🔍 [ReportsDataSource] Filtros aplicados: $filtros');
 
         return {
           'categorias': categorias,
@@ -159,7 +93,6 @@ class ReportsRemoteDataSource {
       } else {
         final message = response.data!['message'] as String? ??
             'Error al obtener porcentajes de categorías';
-        print('❌ [ReportsDataSource] Error en data: $message');
         throw ConnectionException(message);
       }
     } on ApiException {
@@ -177,16 +110,168 @@ class ReportsRemoteDataSource {
     }
   }
 
+  /// Obtiene sucursales activas (alias de getSucursalesDisponibles con action=activas)
+  Future<List<SucursalModel>> getSucursalesActivas() async {
+    try {
+      final response = await apiClient.get(
+        AppConfig.sucursalesEndpoint,
+        queryParams: {'action': 'activas'},
+      );
+      if (!response.success) {
+        throw ConnectionException(response.error ?? 'Error al obtener sucursales activas');
+      }
+      if (response.data!['success'] == true) {
+        final List<dynamic> list = response.data!['data'] ?? [];
+        return list.map((json) => SucursalModel.fromJson(json)).toList();
+      }
+      throw ConnectionException(
+        response.data!['message'] as String? ?? 'Error al obtener sucursales activas',
+      );
+    } on ApiException {
+      rethrow;
+    } catch (e) {
+      if (e.toString().toLowerCase().contains('socketexception') ||
+          e.toString().toLowerCase().contains('failed host lookup') ||
+          e.toString().toLowerCase().contains('timeout')) {
+        throw ConnectionException.fromError(e);
+      }
+      throw ConnectionException('Error inesperado: ${e.toString()}', originalError: e);
+    }
+  }
+
+  /// Obtiene los roles disponibles
+  Future<List<Map<String, dynamic>>> getRoles() async {
+    try {
+      final response = await apiClient.get(AppConfig.rolesEndpoint);
+      if (!response.success) {
+        throw ConnectionException(response.error ?? 'Error al obtener roles');
+      }
+      if (response.data!['success'] == true) {
+        final List<dynamic> list = response.data!['data'] ?? [];
+        return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+      throw ConnectionException(
+        response.data!['message'] as String? ?? 'Error al obtener roles',
+      );
+    } on ApiException {
+      rethrow;
+    } catch (e) {
+      if (e.toString().toLowerCase().contains('socketexception') ||
+          e.toString().toLowerCase().contains('failed host lookup') ||
+          e.toString().toLowerCase().contains('timeout')) {
+        throw ConnectionException.fromError(e);
+      }
+      throw ConnectionException('Error inesperado: ${e.toString()}', originalError: e);
+    }
+  }
+
+  /// Obtiene vista previa del reporte (datos tabulares)
+  Future<Map<String, dynamic>> getReporteVistaPrevia({
+    required int usuarioId,
+    required String tipo,
+    String? fechaDesde,
+    String? fechaHasta,
+    int? sucursalId,
+    int? rolId,
+    String? material,
+  }) async {
+    try {
+      final body = <String, dynamic>{
+        'action': 'vista_previa',
+        'usuario_id': usuarioId,
+        'tipo': tipo,
+      };
+      if (fechaDesde != null) body['fecha_desde'] = fechaDesde;
+      if (fechaHasta != null) body['fecha_hasta'] = fechaHasta;
+      if (sucursalId != null) body['sucursal_id'] = sucursalId;
+      if (rolId != null) body['rol_id'] = rolId;
+      if (material != null) body['material'] = material;
+
+      final response = await apiClient.post(
+        AppConfig.reportesApiEndpoint,
+        body: body,
+        useFormData: false,
+      );
+
+      if (!response.success) {
+        throw ConnectionException(response.error ?? 'Error al obtener vista previa');
+      }
+      return response.data!;
+    } on ApiException {
+      rethrow;
+    } catch (e) {
+      if (e.toString().toLowerCase().contains('socketexception') ||
+          e.toString().toLowerCase().contains('failed host lookup') ||
+          e.toString().toLowerCase().contains('timeout')) {
+        throw ConnectionException.fromError(e);
+      }
+      throw ConnectionException('Error inesperado: ${e.toString()}', originalError: e);
+    }
+  }
+
+  /// Descarga el reporte en PDF y lo guarda en un archivo temporal
+  Future<File> downloadReportePdf({
+    required int usuarioId,
+    required String tipo,
+    String? fechaDesde,
+    String? fechaHasta,
+    int? sucursalId,
+    int? rolId,
+    String? material,
+  }) async {
+    try {
+      final uri = Uri.parse('${apiClient.baseUrl}${AppConfig.reportesApiEndpoint}');
+      final body = <String, dynamic>{
+        'action': 'descargar_pdf',
+        'usuario_id': usuarioId.toString(),
+        'tipo': tipo,
+      };
+      if (fechaDesde != null) body['fecha_desde'] = fechaDesde;
+      if (fechaHasta != null) body['fecha_hasta'] = fechaHasta;
+      if (sucursalId != null) body['sucursal_id'] = sucursalId.toString();
+      if (rolId != null) body['rol_id'] = rolId.toString();
+      if (material != null) body['material'] = material;
+
+      final formData = body.entries
+          .map((e) => '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+          .join('&');
+
+      final headers = Map<String, String>.from(apiClient.defaultHeaders);
+      headers['Content-Type'] = 'application/x-www-form-urlencoded';
+
+      final response = await http.post(
+        uri,
+        headers: headers,
+        body: formData,
+      ).timeout(const Duration(seconds: 60));
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw ConnectionException('Error al descargar PDF: ${response.statusCode}');
+      }
+
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/reporte_$tipo.pdf');
+      await file.writeAsBytes(response.bodyBytes);
+      return file;
+    } on ApiException {
+      rethrow;
+    } catch (e) {
+      if (e.toString().toLowerCase().contains('socketexception') ||
+          e.toString().toLowerCase().contains('failed host lookup') ||
+          e.toString().toLowerCase().contains('timeout')) {
+        throw ConnectionException.fromError(e);
+      }
+      throw ConnectionException('Error inesperado: ${e.toString()}', originalError: e);
+    }
+  }
+
   /// Obtiene gastos, compras, ventas y ganancias por sucursal
-  /// Si no se especifica sucursal, devuelve todas las sucursales para el mes/año opcional
   Future<List<SucursalGastosComprasModel>> getGastosComprasPorSucursal({
     String? mes,
     String? anio,
     int? sucursalId,
   }) async {
     try {
-      print('📡 [ReportsDataSource] Obteniendo gastos/compras por sucursal...');
-
       final queryParams = <String, dynamic>{'action': 'gastos_compras_por_sucursal'};
       if (mes != null && mes.isNotEmpty) queryParams['mes'] = mes;
       if (anio != null && anio.isNotEmpty) queryParams['anio'] = anio;
@@ -197,26 +282,18 @@ class ReportsRemoteDataSource {
         queryParams: queryParams,
       );
 
-      print('📥 [ReportsDataSource] Respuesta recibida: success=${response.success}, status=${response.statusCode}');
-
       if (!response.success) {
         final message = response.error ?? 'Error al obtener datos de graficos por sucursal';
-        print('❌ [ReportsDataSource] Error en respuesta: $message');
         throw ConnectionException(message);
       }
 
       if (response.data!['success'] == true) {
         final List<dynamic> list = response.data!['data'] ?? [];
-        print('✅ [ReportsDataSource] Items encontrados: ${list.length}');
-
-        final items = list
+        return list
             .map((json) => SucursalGastosComprasModel.fromJson(json as Map<String, dynamic>))
             .toList();
-
-        return items;
       } else {
         final message = response.data!['message'] as String? ?? 'Error al obtener datos de graficos por sucursal';
-        print('❌ [ReportsDataSource] Error en data: $message');
         throw ConnectionException(message);
       }
     } on ApiException {
